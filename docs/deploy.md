@@ -62,7 +62,11 @@ your own app, or delete it to use the Dockerfile default.)
   `'$PORT' is not a valid integer`. `fastapi run` already reads the `PORT` env var Railway
   injects and binds `0.0.0.0`, so just write `fastapi run app.py` — no `--port`, no `--host`.
 - **Secrets are Railway variables, not your `.env`.** The `.env` file never reaches the
-  image (gitignored + dockerignored). Set each value with `railway variables --set`.
+  image (gitignored + dockerignored). Set each value with `railway variables --set`. These
+  are **readable** by anyone with access to your project (dashboard / CLI) — fine for a solo
+  project with throwaway keys, and handy if you ever need to recover them. For genuinely
+  sensitive or shared credentials, Railway has **Sealed Variables** (write-only: used at
+  runtime but never readable again — so you can't recover those either).
 - **Protect anything you expose publicly.**
   - A **web UI** → set `APP_PASSWORD` so it's behind a login (see `examples/agent_idea_web`,
     Pattern C). Otherwise it's open to the world and your API bill.
