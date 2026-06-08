@@ -63,6 +63,52 @@ KEY_PENDING_RECIPE = "pending_recipe"
 
 
 # ---------------------------------------------------------------------------
+# Authorization gate
+# ---------------------------------------------------------------------------
+
+
+async def _is_authorized(telegram_id: int) -> bool:
+    """Return True if this user may use the bot (or no password is configured)."""
+    if not get_settings().telegram_bot_password:
+        return True
+    row = await db.fetchrow(
+        "SELECT telegram_id FROM proteinbot_authorized WHERE telegram_id = $1", telegram_id
+    )
+    return row is not None
+
+
+async def _authorize_user(telegram_id: int) -> None:
+    await db.execute(
+        "INSERT INTO proteinbot_authorized (telegram_id) VALUES ($1) ON CONFLICT DO NOTHING",
+        telegram_id,
+    )
+
+
+async def _check_auth(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Return True if the user is cleared to proceed.
+
+    If not, either grants access (correct password) or explains the gate, then returns False.
+    """
+    assert update.effective_user
+    tid = update.effective_user.id
+    if await _is_authorized(tid):
+        return True
+
+    text = update.message.text.strip() if update.message and update.message.text else ""
+    pwd = get_settings().telegram_bot_password or ""
+
+    if text == pwd:
+        await _authorize_user(tid)
+        if update.message:
+            await update.message.reply_text("Access granted! Send /start to set up your profile.")
+    elif update.message:
+        await update.message.reply_text(
+            "This bot is private. Enter the access password to continue."
+        )
+    return False
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -125,6 +171,8 @@ async def _mark_reminded_today(telegram_id: int, today: date) -> None:
 
 
 async def cmd_reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await _check_auth(update, context):
+        return
     assert update.effective_user and update.message
     telegram_id = update.effective_user.id
     await db.execute("DELETE FROM proteinbot_meals WHERE telegram_id = $1", telegram_id)
@@ -156,6 +204,8 @@ def _keyboard_rows(*rows: tuple[tuple[str, str], ...]) -> InlineKeyboardMarkup:
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not await _check_auth(update, context):
+        return ConversationHandler.END
     assert update.effective_user and update.message
     profile = await _get_profile(update.effective_user.id)
     if profile:
@@ -407,6 +457,8 @@ async def ob_custom_goal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 
 async def cmd_timezone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await _check_auth(update, context):
+        return
     assert update.effective_user and update.message
     profile = await _get_profile(update.effective_user.id)
     if not profile:
@@ -440,6 +492,8 @@ async def handle_timezone_callback(update: Update, context: ContextTypes.DEFAULT
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await _check_auth(update, context):
+        return
     assert update.effective_user and update.message and update.message.photo
     telegram_id = update.effective_user.id
     profile = await _get_profile(telegram_id)
@@ -583,6 +637,8 @@ async def _handle_ingredients(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await _check_auth(update, context):
+        return
     assert update.effective_user and update.message and update.message.text
     telegram_id = update.effective_user.id
     text = update.message.text.strip()

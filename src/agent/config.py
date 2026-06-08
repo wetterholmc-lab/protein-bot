@@ -83,6 +83,12 @@ class Settings(BaseSettings):
     telegram_bot_token: str | None = Field(
         default=None, description="Telegram bot token from @BotFather."
     )
+    # If set, users must enter this password before the bot accepts any messages.
+    # Leave unset to keep the bot open to anyone who finds it.
+    telegram_bot_password: str | None = Field(
+        default=None,
+        description="Password users must enter once to unlock the bot.",
+    )
 
 
 @lru_cache
