@@ -17,6 +17,7 @@ dependencies = [
     "pydantic-ai-slim[openrouter]>=1.104.0",
     "pydantic-settings>=2.14.1",
     "python-dotenv>=1.2.2",
+    "python-telegram-bot[job-queue]>=21.0",
     "rich>=15.0.0",
     "tqdm>=4.67.3",
 ]
@@ -26,6 +27,8 @@ dependencies = [
 agent = "agent.main:main"
 # Check your setup with `uv run agent-doctor`.
 agent-doctor = "agent.doctor:main"
+# Run the protein tracker Telegram bot.
+proteinbot = "agent.agents.proteinbot.bot:main"
 
 [build-system]
 requires = ["hatchling"]

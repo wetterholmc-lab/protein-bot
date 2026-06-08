@@ -78,6 +78,12 @@ class Settings(BaseSettings):
         description="Neon Postgres connection string. Needed for the db service.",
     )
 
+    # --- Telegram bot (optional) --------------------------------------------
+    # Get a token from @BotFather on Telegram.
+    telegram_bot_token: str | None = Field(
+        default=None, description="Telegram bot token from @BotFather."
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:
