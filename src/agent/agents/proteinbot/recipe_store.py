@@ -33,6 +33,15 @@ async def save_recipe(
     return int(row["id"])
 
 
+async def list_recipes(telegram_id: int) -> list[str]:
+    """Return the names of all saved recipes for a user, newest first."""
+    rows = await db.fetch(
+        "SELECT name FROM proteinbot_recipes WHERE telegram_id = $1 ORDER BY created_at DESC",
+        telegram_id,
+    )
+    return [str(r["name"]) for r in rows]
+
+
 async def find_recipe(telegram_id: int, name: str) -> dict | None:
     """Look up a saved recipe by name (case-insensitive, partial match)."""
     row = await db.fetchrow(

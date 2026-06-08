@@ -29,6 +29,7 @@ the wrong tool, or cost money and time. Decide *now* how the agent should fail
 | Contextual feedback after meal is off (e.g. wrong time of day assessment) | Medium / mild | Feedback is best-effort and time-based — the bot should never be judgmental. If the user disagrees, they can ignore it. |
 | User asks for meal suggestions but has no profile yet | Low / mild | Redirect to /start to set up a profile first. |
 | Meal suggestion intent is misclassified (e.g. "what do you think?" → meal_suggestion) | Low / mild | Intent classifier uses LLM — occasional misclassification is expected. User can rephrase. |
+| User writes in a language where yes/no is not recognised | Low / mild | yes/no detection covers English, Swedish, French, German, Spanish, and a few others. For unrecognised responses, the bot waits — the conversation stays open. |
 
 ---
 

@@ -43,6 +43,7 @@ class UserProfile(BaseModel):
     pregnant_or_breastfeeding: bool | None
     perimenopausal: bool | None  # asked for females aged 40+
     protein_goal_g: int
+    timezone_offset: int = 1  # hours from UTC; default CET (UTC+1)
 
 
 class FoodEstimate(BaseModel):

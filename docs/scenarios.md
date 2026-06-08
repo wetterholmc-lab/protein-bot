@@ -59,9 +59,9 @@ reuse.
 
 ---
 
-### 3. Status check at any time
-1. Caroline types "status" (or "how am I doing?", "what's left?", "hur ligger jag till?" —
-   the bot understands natural language, not just exact commands).
+### 3. Status check at any time — any language
+1. Caroline types "status", "how am I doing?", "what's left?", "hur ligger jag till?",
+   "combien il me reste?" — the bot understands natural language in any language.
 2. The agent replies: "So far today: 83g protein of your 110g goal. You have about 27g left.
    Logged meals: scrambled eggs (morning), chicken and rice (lunch), lentil soup (afternoon)."
 
@@ -96,8 +96,9 @@ after dinner. Suggestions respect the user's diet style (omnivore/vegetarian/veg
 
 ---
 
-### 9. Meal suggestion on request
-1. Caroline types "what should I eat for lunch?" after logging breakfast (21g of 110g).
+### 9. Meal suggestion on request — any language
+1. Caroline types "what should I eat for lunch?", "vad ska jag äta till lunch?", or
+   "que manger au déjeuner?" after logging breakfast (21g of 110g).
 2. The agent replies: "You have 89g left to hit your goal today.
    Suggestions for lunch:
    - Grilled chicken salad (~40g)

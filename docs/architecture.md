@@ -12,9 +12,9 @@ Decompose the agent into the smallest pieces you can build and **test in isolati
 | Module | Does one thing | Input → Output |
 |--------|----------------|----------------|
 | `telegram_handler` | Receive messages from Telegram and route them | Telegram update → routed to the right module |
-| `intent_classifier` | Decide what the user wants from a text message | Text → intent (`status` / `correction` / `meal_suggestion` / `off_topic`) + extracted values |
+| `intent_classifier` | Decide what the user wants from a text message; handles input in any language | Text (any language) → intent (`status` / `correction` / `meal_suggestion` / `off_topic`) + extracted values |
 | `food_analyzer` | Estimate protein in a food photo using a vision model | Image → food description + protein range (min/max g) |
-| `ingredient_calculator` | Calculate protein per portion from a list of ingredients | Ingredients + quantities + portions → protein per portion (min/max g) |
+| `ingredient_calculator` | Calculate protein per portion from a free-text ingredient list; handles any language | Ingredients + quantities + portions (any language) → protein per portion (min/max g) |
 | `meal_logger` | Write a meal entry to the database | Meal data → saved row |
 | `daily_tracker` | Sum today's logged meals and compare to the goal | user_id + date → total logged g, goal g, deficit g, meal list |
 | `goal_calculator` | Calculate a personal protein goal from onboarding data | age, weight, height, sex, activity, goal, diet_style → goal in g/day |

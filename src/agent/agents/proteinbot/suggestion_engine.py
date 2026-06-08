@@ -17,6 +17,7 @@ Rules:
 - Match the diet style strictly: no meat for vegetarian/vegan, no animal products for vegan.
 - Format food suggestions on their own line starting with a dash.
 - Never lecture or moralize. Be warm, practical, and direct.
+- If the user has saved recipes, consider suggesting one when it fits the meal and protein target.
 """.strip()
 
 _agent: Agent[None, str] = Agent(
@@ -63,6 +64,13 @@ def _time_of_day_label(hour: int) -> str:
     return "dinner"
 
 
+def _recipe_hint(saved_recipe_names: list[str] | None) -> str:
+    if not saved_recipe_names:
+        return ""
+    names = ", ".join(saved_recipe_names[:5])  # cap to avoid bloating the prompt
+    return f" The user has these saved recipes: {names}."
+
+
 async def feedback_after_meal(
     meal_description: str,
     meal_protein_min: int,
@@ -71,6 +79,7 @@ async def feedback_after_meal(
     goal_g: int,
     diet_style: DietStyle,
     now: datetime | None = None,
+    saved_recipe_names: list[str] | None = None,
 ) -> str:
     """Return a short contextual comment on a just-logged meal.
 
@@ -88,7 +97,8 @@ async def feedback_after_meal(
         f"(~{meal_protein_min}–{meal_protein_max}g protein) as {meal_label}. "
         f"Their total today is now {total_today_g}g of their {goal_g}g goal "
         f"({deficit_g}g remaining). At this time of day they would typically expect "
-        f"to have around {expected_g}g logged. Diet style: {diet_style.value}.\n\n"
+        f"to have around {expected_g}g logged. Diet style: {diet_style.value}."
+        f"{_recipe_hint(saved_recipe_names)}\n\n"
         "Give a 1–2 sentence comment on whether this is on track, a bit low, or a "
         "great start. If it's low, add 1–2 concrete suggestions for what to add."
     )
@@ -100,30 +110,42 @@ async def suggest_for_meal(
     meal_name: str,
     remaining_g: int,
     diet_style: DietStyle,
+    saved_recipe_names: list[str] | None = None,
 ) -> str:
     """Suggest what to eat for a specific upcoming meal to stay on track."""
     result = await _agent.run(
         f"The user wants suggestions for {meal_name}. "
-        f"They still need about {remaining_g}g of protein today. Diet: {diet_style.value}. "
+        f"They still need about {remaining_g}g of protein today. Diet: {diet_style.value}."
+        f"{_recipe_hint(saved_recipe_names)} "
         f"Suggest 2–3 {meal_name} options that would make a meaningful dent in that, "
         "with approximate protein per serving."
     )
     return result.output
 
 
-async def suggest_dinner(deficit_g: int, diet_style: DietStyle) -> str:
+async def suggest_dinner(
+    deficit_g: int,
+    diet_style: DietStyle,
+    saved_recipe_names: list[str] | None = None,
+) -> str:
     """Return dinner suggestions that cover most of the deficit."""
     result = await _agent.run(
-        f"Protein deficit: {deficit_g}g. Diet: {diet_style.value}. "
+        f"Protein deficit: {deficit_g}g. Diet: {diet_style.value}."
+        f"{_recipe_hint(saved_recipe_names)} "
         "Suggest 2–3 dinner options that would cover most of this deficit."
     )
     return result.output
 
 
-async def suggest_snacks(deficit_g: int, diet_style: DietStyle) -> str:
+async def suggest_snacks(
+    deficit_g: int,
+    diet_style: DietStyle,
+    saved_recipe_names: list[str] | None = None,
+) -> str:
     """Return snack suggestions for a smaller gap."""
     result = await _agent.run(
-        f"Protein deficit: {deficit_g}g. Diet: {diet_style.value}. "
+        f"Protein deficit: {deficit_g}g. Diet: {diet_style.value}."
+        f"{_recipe_hint(saved_recipe_names)} "
         "Suggest 2–3 high-protein snack options."
     )
     return result.output

@@ -1,7 +1,7 @@
 """Telegram bot — entry point and message routing for the protein tracker."""
 
 import re
-from datetime import UTC, time
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from loguru import logger
@@ -85,12 +85,13 @@ async def _save_profile(profile: UserProfile) -> None:
         """
         INSERT INTO proteinbot_users
             (telegram_id, age, weight_kg, height_cm, sex, activity_level, goal,
-             diet_style, pregnant_or_breastfeeding, perimenopausal, protein_goal_g)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+             diet_style, pregnant_or_breastfeeding, perimenopausal, protein_goal_g,
+             timezone_offset)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
         ON CONFLICT (telegram_id) DO UPDATE SET
             age=$2, weight_kg=$3, height_cm=$4, sex=$5, activity_level=$6,
             goal=$7, diet_style=$8, pregnant_or_breastfeeding=$9,
-            perimenopausal=$10, protein_goal_g=$11
+            perimenopausal=$10, protein_goal_g=$11, timezone_offset=$12
         """,
         profile.telegram_id,
         profile.age,
@@ -103,6 +104,23 @@ async def _save_profile(profile: UserProfile) -> None:
         profile.pregnant_or_breastfeeding,
         profile.perimenopausal,
         profile.protein_goal_g,
+        profile.timezone_offset,
+    )
+
+
+async def _save_timezone(telegram_id: int, offset: int) -> None:
+    await db.execute(
+        "UPDATE proteinbot_users SET timezone_offset = $1 WHERE telegram_id = $2",
+        offset,
+        telegram_id,
+    )
+
+
+async def _mark_reminded_today(telegram_id: int, today: date) -> None:
+    await db.execute(
+        "UPDATE proteinbot_users SET last_reminded_date = $1 WHERE telegram_id = $2",
+        today,
+        telegram_id,
     )
 
 
@@ -354,7 +372,8 @@ async def ob_confirm_goal(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await _save_profile(profile)
     await update.callback_query.edit_message_text(
         f"All set! Your daily protein goal is *{profile.protein_goal_g}g*.\n\n"
-        "Send me a food photo to log your first meal. I'll also check in at 15:00 each day.",
+        "Send me a food photo to log your first meal. I'll also check in at 15:00 each day.\n\n"
+        "To set your timezone, use /timezone (default: UTC+1).",
         parse_mode=ParseMode.MARKDOWN,
     )
     return ConversationHandler.END
@@ -375,10 +394,44 @@ async def ob_custom_goal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await _save_profile(profile)
     await update.message.reply_text(
         f"Got it — your daily protein goal is set to *{goal_g}g*.\n\n"
-        "Send me a food photo to log your first meal. I'll also check in at 15:00 each day.",
+        "Send me a food photo to log your first meal. I'll also check in at 15:00 each day.\n\n"
+        "To set your timezone, use /timezone (default: UTC+1).",
         parse_mode=ParseMode.MARKDOWN,
     )
     return ConversationHandler.END
+
+
+# ---------------------------------------------------------------------------
+# Timezone command
+# ---------------------------------------------------------------------------
+
+
+async def cmd_timezone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    assert update.effective_user and update.message
+    profile = await _get_profile(update.effective_user.id)
+    if not profile:
+        await update.message.reply_text("Type /start to set up your profile first.")
+        return
+    sign = "+" if profile.timezone_offset >= 0 else ""
+    await update.message.reply_text(
+        f"Your current timezone: UTC{sign}{profile.timezone_offset}.\nPick your UTC offset below:",
+        reply_markup=_keyboard_rows(
+            (("UTC-8", "tz_-8"), ("UTC-5", "tz_-5"), ("UTC+0", "tz_0")),
+            (("UTC+1", "tz_1"), ("UTC+2", "tz_2"), ("UTC+3", "tz_3")),
+            (("UTC+8", "tz_8"), ("UTC+9", "tz_9"), ("UTC+10", "tz_10")),
+        ),
+    )
+
+
+async def handle_timezone_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    assert update.callback_query and update.effective_user and update.callback_query.data
+    await update.callback_query.answer()
+    offset = int(update.callback_query.data.split("_", 1)[1])
+    await _save_timezone(update.effective_user.id, offset)
+    sign = "+" if offset >= 0 else ""
+    await update.callback_query.edit_message_text(
+        f"Timezone set to UTC{sign}{offset}. The 15:00 reminder will now fire at your local time."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -440,6 +493,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     _ud(context)[KEY_LAST_MEAL_ID] = meal_id
 
     summary = await daily_tracker.get_daily_summary(profile)
+    saved_recipes = await recipe_store.list_recipes(telegram_id)
     feedback = await suggestion_engine.feedback_after_meal(
         meal_description=estimate.description,
         meal_protein_min=estimate.protein_min_g,
@@ -447,6 +501,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         total_today_g=summary.total_g,
         goal_g=summary.goal_g,
         diet_style=profile.diet_style,
+        saved_recipe_names=saved_recipes,
     )
     await update.message.reply_text(
         f"Logged: *{estimate.description}* — about "
@@ -502,6 +557,7 @@ async def _handle_ingredients(update: Update, context: ContextTypes.DEFAULT_TYPE
     }
 
     summary = await daily_tracker.get_daily_summary(profile)
+    saved_recipes = await recipe_store.list_recipes(telegram_id)
     feedback = await suggestion_engine.feedback_after_meal(
         meal_description=result.description,
         meal_protein_min=result.protein_per_portion_min_g,
@@ -509,6 +565,7 @@ async def _handle_ingredients(update: Update, context: ContextTypes.DEFAULT_TYPE
         total_today_g=summary.total_g,
         goal_g=summary.goal_g,
         diet_style=profile.diet_style,
+        saved_recipe_names=saved_recipes,
     )
     await update.message.reply_text(
         f"Logged: *{result.description}* — about "
@@ -596,32 +653,57 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     elif intent_result.intent == Intent.correction and intent_result.correction_g is not None:
         g = intent_result.correction_g
-        meal_id = ud.get(KEY_LAST_MEAL_ID)
-        if not meal_id:
-            await update.message.reply_text(
-                "I'm not sure which meal you're correcting. "
-                "Log a meal first, then send me the correction."
-            )
+        summary = await daily_tracker.get_daily_summary(profile)
+
+        if not summary.meals:
+            await update.message.reply_text("No meals logged today yet — nothing to correct.")
             return
-        if g > 200:
-            await update.message.reply_text(
-                f"That's quite high ({g}g) — are you sure? Reply *yes* to save or *no* to cancel.",
-                parse_mode=ParseMode.MARKDOWN,
-            )
-        else:
-            await update.message.reply_text(
-                f"I'll update that to *{g}g* — shall I save it? Reply *yes* or *no*.",
-                parse_mode=ParseMode.MARKDOWN,
-            )
+
+        # Store the correction gram value; the yes/no handler will apply it once we know
+        # which meal to update.
         ud[KEY_PENDING_CORRECTION_G] = g
+
+        if len(summary.meals) == 1:
+            # Only one meal today — correct it without asking which one.
+            ud[KEY_LAST_MEAL_ID] = summary.meals[0].id
+            if g > 200:
+                await update.message.reply_text(
+                    f"That's quite high ({g}g) — are you sure? "
+                    "Reply *yes* to save or *no* to cancel.",
+                    parse_mode=ParseMode.MARKDOWN,
+                )
+            else:
+                await update.message.reply_text(
+                    f"I'll update that to *{g}g* — shall I save it? Reply *yes* or *no*.",
+                    parse_mode=ParseMode.MARKDOWN,
+                )
+        else:
+            # Multiple meals today — ask which one to correct.
+            await update.message.reply_text(
+                f"Got it — {g}g. Which meal do you want to correct?",
+                reply_markup=_keyboard_rows(
+                    *[
+                        (
+                            (
+                                f"{m.logged_at.astimezone(timezone(timedelta(hours=profile.timezone_offset))).strftime('%H:%M')}"
+                                f" — {m.description[:28]}",
+                                f"corr_meal_{m.id}",
+                            ),
+                        )
+                        for m in summary.meals
+                    ]
+                ),
+            )
 
     elif intent_result.intent == Intent.meal_suggestion:
         meal_type = intent_result.meal_type or "your next meal"
         summary = await daily_tracker.get_daily_summary(profile)
+        saved_recipes = await recipe_store.list_recipes(telegram_id)
         suggestions = await suggestion_engine.suggest_for_meal(
             meal_name=meal_type,
             remaining_g=max(summary.deficit_g, 0),
             diet_style=profile.diet_style,
+            saved_recipe_names=saved_recipes,
         )
         remaining_note = (
             f"You have *{summary.deficit_g}g* left to hit your goal today."
@@ -641,15 +723,51 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         )
 
 
+async def handle_meal_correction_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """Called when the user taps a meal button to select which meal to correct."""
+    assert update.callback_query and update.effective_user and update.callback_query.data
+    await update.callback_query.answer()
+    ud = _ud(context)
+    meal_id = int(update.callback_query.data.split("_")[2])
+    ud[KEY_LAST_MEAL_ID] = meal_id
+    g = ud.get(KEY_PENDING_CORRECTION_G, 0)
+    if g > 200:
+        await update.callback_query.edit_message_text(
+            f"That's quite high ({g}g) — are you sure? Reply *yes* to save or *no* to cancel.",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+    else:
+        await update.callback_query.edit_message_text(
+            f"I'll update that to *{g}g* — shall I save it? Reply *yes* or *no*.",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+
+
 # ---------------------------------------------------------------------------
 # 15:00 daily reminder job
 # ---------------------------------------------------------------------------
 
 
 async def daily_reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
-    rows = await db.fetch("SELECT telegram_id FROM proteinbot_users")
+    rows = await db.fetch(
+        "SELECT telegram_id, timezone_offset, last_reminded_date FROM proteinbot_users"
+    )
     for row in rows:
         telegram_id = int(row["telegram_id"])
+        tz_offset = int(row["timezone_offset"])
+        last_reminded: date | None = row["last_reminded_date"]
+
+        user_tz = timezone(timedelta(hours=tz_offset))
+        local_now = datetime.now(tz=user_tz)
+
+        # Only send at 15:00 in the user's local time, and at most once per day.
+        if local_now.hour != 15:
+            continue
+        if last_reminded == local_now.date():
+            continue
+
         profile = await _get_profile(telegram_id)
         if not profile:
             continue
@@ -674,6 +792,7 @@ async def daily_reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
                     parse_mode=ParseMode.MARKDOWN,
                     reply_markup=_keyboard(("Yes", "dinner_yes"), ("No", "dinner_no")),
                 )
+            await _mark_reminded_today(telegram_id, local_now.date())
         except Exception:
             logger.exception(f"reminder failed for {telegram_id}")
 
@@ -687,21 +806,26 @@ async def handle_dinner_callback(update: Update, context: ContextTypes.DEFAULT_T
         return
 
     summary = await daily_tracker.get_daily_summary(profile)
+    saved_recipes = await recipe_store.list_recipes(telegram_id)
     data = update.callback_query.data
 
     if data == "dinner_yes":
-        suggestions = await suggestion_engine.suggest_dinner(summary.deficit_g, profile.diet_style)
+        suggestions = await suggestion_engine.suggest_dinner(
+            summary.deficit_g, profile.diet_style, saved_recipe_names=saved_recipes
+        )
         extra = ""
         if summary.deficit_g > 40:
             snacks = await suggestion_engine.suggest_snacks(
-                summary.deficit_g - 35, profile.diet_style
+                summary.deficit_g - 35, profile.diet_style, saved_recipe_names=saved_recipes
             )
             extra = f"\n\nIf dinner doesn't fully cover it, a snack could help:\n{snacks}"
         await update.callback_query.edit_message_text(
             f"Here are some dinner ideas that should get you close:\n{suggestions}{extra}"
         )
     else:
-        snacks = await suggestion_engine.suggest_snacks(summary.deficit_g, profile.diet_style)
+        snacks = await suggestion_engine.suggest_snacks(
+            summary.deficit_g, profile.diet_style, saved_recipe_names=saved_recipes
+        )
         await update.callback_query.edit_message_text(
             f"Here are some high-protein snack ideas:\n{snacks}"
         )
@@ -750,15 +874,18 @@ def build_app() -> Application:  # type: ignore[type-arg]
 
     app.add_handler(onboarding)
     app.add_handler(CommandHandler("reset", cmd_reset))
+    app.add_handler(CommandHandler("timezone", cmd_timezone))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    app.add_handler(CallbackQueryHandler(handle_timezone_callback, pattern=r"^tz_-?\d+$"))
     app.add_handler(CallbackQueryHandler(handle_dinner_callback, pattern="^dinner_(yes|no)$"))
+    app.add_handler(
+        CallbackQueryHandler(handle_meal_correction_callback, pattern=r"^corr_meal_\d+$")
+    )
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
     assert app.job_queue is not None
-    app.job_queue.run_daily(
-        daily_reminder,
-        time=time(hour=13, minute=0, tzinfo=UTC),  # 15:00 CET (UTC+2 in summer)
-    )
+    # Run every hour; daily_reminder checks each user's local time and sends only at 15:00.
+    app.job_queue.run_repeating(daily_reminder, interval=3600)
 
     return app
 

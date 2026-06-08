@@ -112,6 +112,16 @@ Triggers: "what should I eat for lunch?", "suggest dinner", "vad ska jag äta ti
 
 ---
 
+## Language
+
+- **Understands any language.** The bot accepts input in any language — Swedish, English,
+  French, German, Spanish, or anything else. Intent classification, ingredient parsing, and
+  yes/no confirmation all work regardless of the user's language.
+- **Responds in English.** All bot output is in English. This is a deliberate choice to keep
+  the implementation simple and the output consistent.
+
+---
+
 ## Tone & style
 
 - **Concise.** This is a chat interface — keep replies short. One or two sentences is often

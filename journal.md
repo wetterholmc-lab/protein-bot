@@ -218,3 +218,29 @@ bot says so and offers suggestions as inspiration only.
 
 **Docs updated:** policy.md, scenarios.md, architecture.md, failure_modes.md all synced
 to reflect the two new features, the perimenopause question, and the custom goal flow.
+
+## 2026-06-08 — Multilingual input + activity level UX fix
+
+**Multilingual input:**
+Decision: bot responds in English but understands input in any language.
+Responding in the user's language was considered but rejected for now — it would require
+detecting and storing a per-user language, passing it through every LLM call, and generating
+all fixed strings dynamically. The complexity isn't worth it until there are non-Swedish users.
+
+What was changed:
+- `intent_classifier`: system prompt explicitly states "messages may be in any language",
+  with examples in French and German. `is_status_request` heuristic expanded with FR/DE/ES
+  keywords to avoid unnecessary LLM round-trips for obvious status queries.
+- `ingredient_calculator`: system prompt says "ingredient lists may be in any language"
+  and "write the description in English" — so stored meal descriptions are always consistent.
+- `bot.py` yes/no detection: expanded from `(yes, ja, y)` / `(no, nej, n)` to cover
+  `oui, si, da, tak, yep, sure, ok` and `non, nein, nie, nope, cancel`.
+
+**Activity level keyboard UX fix:**
+The inline keyboard had 4 buttons in a single row. On mobile Telegram, each button got ~25%
+of screen width, cutting labels to the first word ("Mostly", "Moderately", "Exercise").
+
+Fix: switched to a 2×2 grid using a new `_keyboard_rows()` helper, and shortened labels to
+one descriptive word each: Sedentary / Moderate / Active / Intense. Added a description of
+each level in the message text above the buttons so the user knows what each means without
+needing long button labels.
