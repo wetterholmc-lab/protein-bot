@@ -64,10 +64,11 @@ similar — the agent understands intent, not just exact commands.
 
 ### D. Correction received
 
-1. Acknowledge the correction and state the new value.
-2. **Confirm before saving:** "I'll update that to 40g — shall I save that?"
-3. Once confirmed: update the log, recalculate the daily total, reply with the new total.
-4. Save the correction to the database as a reference for future similar meals.
+1. **If 2 or more meals were logged today:** show an inline keyboard listing each meal so the user can pick which one to correct.
+2. Once a meal is selected (or if there was only one): acknowledge the correction and state the new value.
+3. **Confirm before saving:** "I'll update that to 40g — shall I save that?"
+4. Once confirmed: update the log, recalculate the daily total, reply with the new total.
+5. Save the correction to the database as a reference for future similar meals.
 
 ### E. Meal suggestion request
 
@@ -80,7 +81,14 @@ Triggers: "what should I eat for lunch?", "suggest dinner", "vad ska jag äta ti
 3. If the goal is already reached, say so and offer the suggestions as inspiration only.
 4. Respect the user's diet style.
 
-### F. 15:00 daily reminder (scheduled)
+### E2. /timezone command
+
+1. User sends `/timezone`.
+2. Show a 3×3 inline keyboard with timezone offsets from UTC-8 to UTC+10.
+3. User taps their offset. Save it to the database.
+4. Reply: "Timezone set to UTC+X. Your daily reminder will arrive at 15:00 your local time."
+
+### F. 15:00 daily reminder (scheduled, timezone-aware)
 
 1. Fetch today's logged total.
 2. **If the goal is already reached:**
@@ -108,7 +116,7 @@ Triggers: "what should I eat for lunch?", "suggest dinner", "vad ska jag äta ti
 | LLM | Understanding natural language requests, generating all replies |
 | Database (read) | Status requests, reminders, onboarding lookup |
 | Database (write) | Logging meals, saving recipes, saving corrections, saving user profile |
-| Telegram scheduler | Sending the 15:00 daily reminder |
+| Telegram scheduler | Sending the 15:00 daily reminder (hourly job, fires per user at their local 15:00) |
 
 ---
 

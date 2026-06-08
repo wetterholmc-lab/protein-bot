@@ -111,6 +111,30 @@ suggestions as inspiration only.
 
 ---
 
+### 10. Correction with multiple meals logged today
+1. Caroline has logged three meals today and types "actually that was more like 50g".
+2. The bot replies with an inline keyboard: "Which meal would you like to correct?
+   - Scrambled eggs (morning)
+   - Chicken and rice (lunch)
+   - Lentil soup (afternoon)"
+3. Caroline taps "Chicken and rice".
+4. The bot replies: "I'll update that to 50g — shall I save that?" (yes/no)
+5. Caroline confirms. Total is recalculated.
+
+**Expected result:** Correction targets the right meal. If only one meal exists, the keyboard is skipped.
+
+---
+
+### 11. Setting timezone
+1. Caroline sends `/timezone`.
+2. The bot shows a 3×3 keyboard: UTC-8, UTC-6, UTC-4, UTC-1, UTC+0, UTC+1, UTC+2, UTC+5, UTC+10.
+3. Caroline taps UTC+2.
+4. The bot replies: "Timezone set to UTC+2. Your daily reminder will arrive at 15:00 your local time."
+
+**Expected result:** Timezone stored in the database. Future reminders arrive at 15:00 local time, not UTC.
+
+---
+
 ## Edge cases
 
 ### 6. Unclear or blurry photo

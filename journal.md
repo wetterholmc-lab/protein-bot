@@ -244,3 +244,46 @@ Fix: switched to a 2×2 grid using a new `_keyboard_rows()` helper, and shortene
 one descriptive word each: Sedentary / Moderate / Active / Intense. Added a description of
 each level in the message text above the buttons so the user knows what each means without
 needing long button labels.
+
+## 2026-06-08 — Fixed three failure modes + deployed to Railway
+
+**Failure mode #3 — Correction only worked on the last meal:**
+When 2+ meals were logged today, the bot always corrected the most recent one regardless
+of what the user intended. Fixed by showing an inline keyboard listing all of today's meals
+when there are 2 or more. The user picks which meal to correct, then provides the actual
+grams. If there's only one meal, the keyboard is skipped and correction proceeds directly.
+New callback handler: `handle_meal_correction_callback` (pattern `^corr_meal_\d+`).
+
+**Failure mode #4 — Recipe suggestions not connected to saved recipes:**
+The suggestion engine had no knowledge of the user's saved recipes, so it couldn't suggest
+them. Fixed by adding `list_recipes()` to `recipe_store.py` and passing `saved_recipe_names`
+into all four suggestion engine functions. The system prompt now mentions saved recipes and
+asks the LLM to consider them when relevant.
+
+**Failure mode #6 — Daily reminder fired at wrong local time for non-CET users:**
+The reminder ran as a daily job at a fixed UTC time, which is wrong for users in other
+timezones. Fixed by:
+- Adding `timezone_offset: int = 1` to `UserProfile` (default UTC+1 / CET).
+- Adding a `/timezone` command with a 3×3 inline keyboard covering UTC-8 to UTC+10.
+- Switching the reminder job from `run_daily` to `run_repeating(interval=3600)` — it now
+  fires every hour and only sends a message if the user's local hour is 15:00.
+- Adding `last_reminded_date` (date column) to the DB to prevent double-sends on restart.
+- Migration: `003_proteinbot_timezone.sql` adds both new columns.
+
+**Deployment to Railway:**
+Goal: bot runs 24/7 without the laptop open.
+
+Lessons from a difficult deploy:
+- Railway free plan hit resource limit mid-session — had to upgrade to Hobby (~$5/mo).
+- `railway init` kept timing out silently while creating empty projects; ended up with 4
+  duplicate "proteinbot" projects. Cleaned up by deleting them via dashboard Settings →
+  Delete project. Future approach: create the service via dashboard first, then `railway link`.
+- Secrets must be set via `railway variables --set "KEY=VALUE"` — `.env` is gitignored and
+  not in the Docker image. Never commit secrets.
+- Don't put `$PORT` in `startCommand` — Railway runs without a shell so vars don't expand.
+  A polling bot has no inbound HTTP, so `$PORT` isn't needed at all.
+- `telegram.error.Conflict` crash loop: Railway restarts on crash, new instance conflicts
+  with dying old one, crash, repeat. Root cause turned out to be a duplicate Railway service
+  with the same bot token running in a different project. Fixed by deleting the duplicate
+  project. Also added `drop_pending_updates=True` to `run_polling()` so the bot clears
+  stale updates on every fresh start, making restarts more resilient.

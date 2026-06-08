@@ -79,6 +79,19 @@ your own app, or delete it to use the Dockerfile default.)
   polling bot just needs to be running — skip the domain.
 - **Database & migrations:** your app reaches out to Neon over the network; migrations run
   on startup (the demo calls `db.apply_migrations` in its lifespan). Nothing extra to do.
+- **`railway init` can silently time out** while still creating an empty project in the
+  dashboard. If it hangs: cancel, go to the dashboard, delete any empty projects it made,
+  then create the service via **Add → Empty Service** instead. Link your folder with
+  `railway link`, then run `railway up`.
+- **One Telegram token, one running service.** If you accidentally deploy the same bot
+  token in two different Railway services (or projects), both poll Telegram simultaneously
+  and crash each other with `telegram.error.Conflict`. Check all your projects for
+  duplicate tokens before debugging further. Delete the duplicate project.
+- **Railway crash-restart loops:** if a bot crashes immediately on startup, Railway
+  restarts it before the old container shuts down — causing another conflict, causing
+  another crash. Break the loop with `railway redeploy` (or Restart from the dashboard)
+  after removing the duplicate. The bot also uses `drop_pending_updates=True` in
+  `run_polling()` to clear stale Telegram state on every fresh start.
 
 ## Day-to-day
 

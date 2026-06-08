@@ -19,9 +19,9 @@ Decompose the agent into the smallest pieces you can build and **test in isolati
 | `daily_tracker` | Sum today's logged meals and compare to the goal | user_id + date → total logged g, goal g, deficit g, meal list |
 | `goal_calculator` | Calculate a personal protein goal from onboarding data | age, weight, height, sex, activity, goal, diet_style → goal in g/day |
 | `suggestion_engine` | Generate food suggestions and contextual meal feedback | Three functions: post-meal feedback (time-aware), meal-type suggestions on request, 15:00 reminder suggestions |
-| `correction_handler` | Apply a user correction to a logged meal | meal_id + corrected_protein_g → updated row |
+| `correction_handler` | Apply a user correction to a logged meal; if 2+ meals today, shows a keyboard to select which one | meal_id + corrected_protein_g → updated row |
 | `recipe_store` | Save and retrieve named recipes | ingredients + portions → saved recipe / recipe_id → recipe |
-| `reminder_scheduler` | Trigger the 15:00 daily check-in for all active users | schedule → calls daily_tracker + suggestion_engine per user |
+| `reminder_scheduler` | Trigger the 15:00 check-in for each user at their local time | hourly job → per user: compute local hour from `timezone_offset`, send only at 15:00 local, skip if already sent today |
 | `onboarding` | Walk the user through setup questions and save their profile | Telegram conversation → saved user profile + calculated goal |
 
 ---
@@ -66,10 +66,12 @@ Telegram text
       → off_topic:       reply redirecting to protein tracking
 ```
 
-### 15:00 reminder
+### 15:00 reminder (timezone-aware)
 ```
-reminder_scheduler (triggered at 15:00)
-  → daily_tracker (per user)
+reminder_scheduler (run_repeating, every hour)
+  → for each user: compute local hour from timezone_offset
+  → skip if local hour ≠ 15, or already sent today (last_reminded_date)
+  → daily_tracker
       → goal reached: send positive confirmation
       → deficit:      ask about dinner plans
                         → yes: suggestion_engine (dinner ideas + snack if needed) → reply
@@ -99,6 +101,8 @@ Stores the user profile set during onboarding.
 | `pregnant_or_breastfeeding` | `bool` | `null` if not asked |
 | `perimenopausal` | `bool` | `null` unless female 40+ and not pregnant; +15g to goal if true |
 | `protein_goal_g` | `int` | Calculated at onboarding; recalculated if profile changes |
+| `timezone_offset` | `smallint` | Hours from UTC; default 1 (CET). Set via `/timezone` command. |
+| `last_reminded_date` | `date` | Date the 15:00 reminder was last sent; prevents double-sends on restart. |
 | `created_at` | `timestamptz` | |
 
 ### `proteinbot_meals`

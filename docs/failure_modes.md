@@ -30,6 +30,9 @@ the wrong tool, or cost money and time. Decide *now* how the agent should fail
 | User asks for meal suggestions but has no profile yet | Low / mild | Redirect to /start to set up a profile first. |
 | Meal suggestion intent is misclassified (e.g. "what do you think?" → meal_suggestion) | Low / mild | Intent classifier uses LLM — occasional misclassification is expected. User can rephrase. |
 | User writes in a language where yes/no is not recognised | Low / mild | yes/no detection covers English, Swedish, French, German, Spanish, and a few others. For unrecognised responses, the bot waits — the conversation stays open. |
+| User wants to correct a meal but has logged several today | Medium / mild | Show an inline keyboard listing all of today's meals so the user can pick which one to correct. If only one meal exists, skip the keyboard and proceed directly. |
+| Reminder fires at the wrong local time for users outside CET | Medium / mild | Reminder runs as an hourly job and checks each user's stored `timezone_offset`. Only sends when the user's local hour is 15. `last_reminded_date` prevents double-sends on restart. User can set their timezone with `/timezone`. |
+| Meal suggestion doesn't mention saved recipes | Medium / mild | `recipe_store.list_recipes()` is called before every suggestion, and the names are passed to the suggestion engine so the LLM can reference them when relevant. |
 
 ---
 

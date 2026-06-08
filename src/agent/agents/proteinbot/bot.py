@@ -894,4 +894,4 @@ def main() -> None:
     setup_logging()
     app = build_app()
     logger.info("Starting protein tracker bot")
-    app.run_polling()
+    app.run_polling(drop_pending_updates=True)
