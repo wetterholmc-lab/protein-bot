@@ -74,7 +74,17 @@ async def _is_authorized(telegram_id: int) -> bool:
     row = await db.fetchrow(
         "SELECT telegram_id FROM proteinbot_authorized WHERE telegram_id = $1", telegram_id
     )
-    return row is not None
+    if row is not None:
+        return True
+    # Users who completed onboarding before the password gate was added are in
+    # proteinbot_users but not proteinbot_authorized — grant them access and backfill.
+    profile_row = await db.fetchrow(
+        "SELECT telegram_id FROM proteinbot_users WHERE telegram_id = $1", telegram_id
+    )
+    if profile_row is not None:
+        await _authorize_user(telegram_id)
+        return True
+    return False
 
 
 async def _authorize_user(telegram_id: int) -> None:
