@@ -287,3 +287,21 @@ Lessons from a difficult deploy:
   with the same bot token running in a different project. Fixed by deleting the duplicate
   project. Also added `drop_pending_updates=True` to `run_polling()` so the bot clears
   stale updates on every fresh start, making restarts more resilient.
+
+## 2026-06-09 19:50 — Fixed password re-prompt for existing users after adding auth gate
+
+After adding the password gate (migration 004 + `proteinbot_authorized` table), users who
+already had a profile were being asked for the password again when uploading food photos.
+
+Root cause: `_is_authorized` only looked at `proteinbot_authorized`. If the migration
+backfill (`INSERT INTO proteinbot_authorized SELECT telegram_id FROM proteinbot_users`)
+didn't catch an existing user — e.g. due to Railway deployment timing or env var sequencing
+— they'd be treated as unauthorized on every request despite having a completed profile.
+
+Fix: `_is_authorized` now falls back to checking `proteinbot_users`. Anyone with a completed
+profile is implicitly authorized and gets auto-backfilled into `proteinbot_authorized` on
+their next interaction, so future checks are instant.
+
+Lesson: when adding an access gate to an existing system, the "grandfather existing users"
+step is critical but fragile. Even with a migration backfill, a defensive fallback in the
+auth check is worth the extra query.

@@ -33,6 +33,7 @@ the wrong tool, or cost money and time. Decide *now* how the agent should fail
 | User wants to correct a meal but has logged several today | Medium / mild | Show an inline keyboard listing all of today's meals so the user can pick which one to correct. If only one meal exists, skip the keyboard and proceed directly. |
 | Reminder fires at the wrong local time for users outside CET | Medium / mild | Reminder runs as an hourly job and checks each user's stored `timezone_offset`. Only sends when the user's local hour is 15. `last_reminded_date` prevents double-sends on restart. User can set their timezone with `/timezone`. |
 | Meal suggestion doesn't mention saved recipes | Medium / mild | `recipe_store.list_recipes()` is called before every suggestion, and the names are passed to the suggestion engine so the LLM can reference them when relevant. |
+| Existing user gets password-prompted after auth gate is added | Low / bad | Migration backfill may not catch a user if timing/deployment is off. `_is_authorized` falls back to checking `proteinbot_users` — anyone with a completed profile is implicitly authorized and auto-backfilled into `proteinbot_authorized`. |
 
 ---
 

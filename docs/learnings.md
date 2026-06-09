@@ -53,6 +53,11 @@ know now" — keep it tidy and current.
 - **Prefix all table names with the project name** (`proteinbot_`) to avoid collisions on
   the shared Neon DB.
 - **Never edit an applied migration** — add a new numbered file instead.
+- **When adding an access gate to an existing system, add a defensive fallback in the auth check.**
+  Migration backfills (`INSERT ... SELECT ... ON CONFLICT DO NOTHING`) can be skipped due to
+  deployment timing or env var sequencing. Having `_is_authorized` also check `proteinbot_users`
+  — "anyone with a completed profile is authorized" — prevents existing users from being locked
+  out. Auto-backfill them into the auth table on the next interaction so future checks are instant.
 
 ## Railway deployment
 
