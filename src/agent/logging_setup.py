@@ -47,8 +47,13 @@ def setup_logging() -> None:
         "<level>{message}</level>"
     )
 
+    # diagnose=False on purpose: loguru's "diagnose" annotates tracebacks with the VALUES
+    # of local variables, which is great for debugging but will happily write secrets
+    # (API keys, tokens) into the console and the log file. Keep it off so a stack trace
+    # can never leak a credential. backtrace=True is safe — it only shows the call frames.
+
     # 1) Console: colorized, easy to read while developing.
-    logger.add(sys.stderr, level=settings.log_level, format=fmt, colorize=True)
+    logger.add(sys.stderr, level=settings.log_level, format=fmt, colorize=True, diagnose=False)
 
     # 2) File: plain text, rotated and time-limited so it stays manageable.
     logger.add(
@@ -61,7 +66,7 @@ def setup_logging() -> None:
         encoding="utf-8",
         enqueue=True,  # safe to log from async code / multiple tasks
         backtrace=True,
-        diagnose=True,
+        diagnose=False,
     )
 
     _CONFIGURED = True
