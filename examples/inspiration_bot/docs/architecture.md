@@ -31,7 +31,7 @@ test data and a careless dev migration can never touch real users.
 | `agent.py` | the pydantic-ai **generator agent**: its `Deps`, tools, and system prompt |
 | `jobs.py` | `generate_for_user()` and `run_due_sends()` (loops due users, isolates failures) |
 | `bot.py` | python-telegram-bot `Application`: command + message handlers, `build_application()` |
-| `app.py` | FastAPI for prod: lifespan sets the webhook; `POST /telegram/<token>`; `POST /cron/tick` |
+| `app.py` | FastAPI for prod: lifespan sets the webhook; `POST /telegram/webhook`; `POST /cron/tick` |
 | entrypoints | `inspo-bot` (polling), `inspo-cron` (run due sends once), `inspo-serve` (webhook + cron HTTP) |
 
 ## The agent's tools — and why scoping is safe
@@ -109,7 +109,8 @@ without a job queue. (`inspo-cron` runs the same `run_due_sends()` once, for loc
 
 - One **web service** runs `inspo-serve` (FastAPI). On startup it registers the webhook with the prod
   token; `fastapi run` reads `PORT` itself (don't put `$PORT` in the start command).
-- `POST /telegram/<token>` receives updates; the secret path/token rejects forgeries.
+- `POST /telegram/webhook` receives updates; a secret **header** (Telegram's `secret_token`,
+  never anything in the URL — URLs leak into access logs) rejects forgeries.
 - `POST /cron/tick` requires a secret token header; an **hourly Railway Cron** job calls it, and the
   due-check (above) decides who actually gets a send.
 - All secrets are Railway variables, never the committed `.env`. (See repo `docs/deploy.md`.)

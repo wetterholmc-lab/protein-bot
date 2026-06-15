@@ -5,7 +5,7 @@
 
 Locally you'll normally use polling instead (python -m examples.inspiration_bot.bot); this
 file is what Railway runs. Two endpoints, both protected by a shared secret:
-  - POST /telegram/<token>  — Telegram delivers updates here (verified by a secret header)
+  - POST /telegram/webhook  — Telegram delivers updates here (verified by a secret header)
   - POST /cron/tick         — the hourly scheduler calls this; it sends to whoever is due
 """
 
@@ -40,16 +40,17 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     # manually here, so call it ourselves — otherwise migrations never run in production.
     await post_init(ptb)
     await ptb.start()
-    if settings.public_url and settings.telegram_bot_token:
-        url = f"{settings.public_url.rstrip('/')}/telegram/{settings.telegram_bot_token}"
+    if settings.public_url:
+        # The path is fixed and secret-free on purpose: a secret in the URL would be
+        # written to web-server/proxy access logs on every request. Telegram instead
+        # echoes `secret_token` in a header we verify below — headers aren't logged.
+        url = f"{settings.public_url.rstrip('/')}/telegram/webhook"
         await ptb.bot.set_webhook(
             url=url,
             secret_token=settings.telegram_webhook_secret,
             allowed_updates=Update.ALL_TYPES,
         )
-        # NB: `url` contains the bot token (it's the secret path), so never log it —
-        # log the shape only. Same rule as logging_setup's diagnose=False.
-        logger.info("webhook registered at {}/telegram/<token>", settings.public_url.rstrip("/"))
+        logger.info("webhook registered at {}", url)
     else:
         logger.warning("PUBLIC_URL not set — webhook not registered (fine for local dev)")
     yield
@@ -65,25 +66,19 @@ async def root() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.post("/telegram/{token}")
+@app.post("/telegram/webhook")
 async def telegram_webhook(
-    token: str,
     request: Request,
     x_telegram_bot_api_secret_token: str | None = Header(default=None),
 ) -> dict[str, bool]:
     """Receive one update from Telegram and hand it to python-telegram-bot.
 
-    Two cheap forgery checks: the path token must be our bot token, and the secret
-    header Telegram echoes must match the one we registered.
+    Authenticity is verified by the secret header Telegram echoes (set via set_webhook's
+    secret_token) — not by anything in the URL, so the token never lands in access logs.
     """
     settings = get_settings()
-    if not settings.telegram_bot_token or not secrets.compare_digest(
-        token, settings.telegram_bot_token
-    ):
-        raise HTTPException(status_code=404)
-    if settings.telegram_webhook_secret and not secrets.compare_digest(
-        x_telegram_bot_api_secret_token or "", settings.telegram_webhook_secret
-    ):
+    secret = settings.telegram_webhook_secret
+    if not secret or not secrets.compare_digest(x_telegram_bot_api_secret_token or "", secret):
         raise HTTPException(status_code=403)
     ptb = _ptb
     if ptb is None:
