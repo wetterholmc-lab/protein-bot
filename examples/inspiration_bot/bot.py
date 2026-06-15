@@ -225,7 +225,7 @@ async def on_unsupported(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 # --- wiring -----------------------------------------------------------------
 
 
-async def _post_init(app: Application) -> None:
+async def post_init(app: Application) -> None:
     """Runs once after the Application initializes: migrate the DB and set the command menu."""
     applied = await db.apply_migrations(HERE / "migrations")
     if applied:
@@ -246,7 +246,7 @@ def build_application() -> Application:
 
     Used by both polling (this file) and the webhook server (app.py).
     """
-    app = ApplicationBuilder().token(_require_token()).post_init(_post_init).build()
+    app = ApplicationBuilder().token(_require_token()).post_init(post_init).build()
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("profile", cmd_profile))

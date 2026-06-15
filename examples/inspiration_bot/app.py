@@ -22,7 +22,7 @@ from telegram.ext import Application
 
 from agent.config import get_settings
 from agent.logging_setup import setup_logging
-from examples.inspiration_bot.bot import build_application
+from examples.inspiration_bot.bot import build_application, post_init
 from examples.inspiration_bot.jobs import run_due_sends
 
 _ptb: Application | None = None  # the python-telegram-bot Application, built on startup
@@ -35,7 +35,10 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     ptb = build_application()  # local keeps a non-None type; the global is for the handlers
     _ptb = ptb
-    await ptb.initialize()  # runs _post_init (migrations + command menu)
+    await ptb.initialize()
+    # PTB only auto-runs post_init from run_polling/run_webhook; we drive the Application
+    # manually here, so call it ourselves — otherwise migrations never run in production.
+    await post_init(ptb)
     await ptb.start()
     if settings.public_url and settings.telegram_bot_token:
         url = f"{settings.public_url.rstrip('/')}/telegram/{settings.telegram_bot_token}"
