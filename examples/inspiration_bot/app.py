@@ -44,7 +44,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
             secret_token=settings.telegram_webhook_secret,
             allowed_updates=Update.ALL_TYPES,
         )
-        logger.info("webhook registered at {}", url)
+        # NB: `url` contains the bot token (it's the secret path), so never log it —
+        # log the shape only. Same rule as logging_setup's diagnose=False.
+        logger.info("webhook registered at {}/telegram/<token>", settings.public_url.rstrip("/"))
     else:
         logger.warning("PUBLIC_URL not set — webhook not registered (fine for local dev)")
     yield
