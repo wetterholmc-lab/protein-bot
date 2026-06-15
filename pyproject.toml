@@ -17,6 +17,7 @@ dependencies = [
     "pydantic-ai-slim[openrouter]>=1.104.0",
     "pydantic-settings>=2.14.1",
     "python-dotenv>=1.2.2",
+    "python-telegram-bot>=21",
     "rich>=15.0.0",
     "tqdm>=4.67.3",
 ]
@@ -61,6 +62,9 @@ venvPath = "."
 venv = ".venv"
 
 [tool.pytest.ini_options]
+# Put the repo root on sys.path so tests can import the `examples` packages (the
+# `agent` package is installed into the venv, but `examples/` is not).
+pythonpath = ["."]
 # asyncio_mode = "auto" means you can write `async def test_...` with no decorator.
 asyncio_mode = "auto"
 # One event loop for the whole session (like a real app has). Some clients

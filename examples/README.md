@@ -40,6 +40,24 @@ Needs `OPENROUTER_API_KEY`, `FAL_KEY`, the `R2_*` keys, and `DATABASE_URL`. Fron
 Jinja2 + HTMX + Tailwind, all via CDN — no build step. Set `APP_PASSWORD` to put it behind
 a login (see Pattern C). Design docs: `examples/agent_idea_web/docs/`.
 
+## 3. `inspiration_bot/` — a Telegram bot (an agent that works both ways)
+
+Forward it a photo or a thought; it understands and files it (vision for photos) and learns
+your taste. Then, on a schedule, it reaches out *first* with a short, personal nudge — so the
+agent is both **reactive** and **proactive**. It's a multi-file example (its own package).
+
+```bash
+# locally: long polling, no public URL needed
+uv run python -m examples.inspiration_bot.bot
+# fire the proactive "morning" nudge now:
+uv run python -m examples.inspiration_bot.cron
+```
+
+Needs `TELEGRAM_BOT_TOKEN`, `OPENROUTER_API_KEY`, `DATABASE_URL`, `R2_*` (`FAL_KEY` optional).
+This is the example that introduces **environments**, a **tool-using agent**, **webhook
+deployment**, and **cron** (Patterns D–F below). Design docs + run/deploy guide:
+`examples/inspiration_bot/` (`docs/` and `README.md`).
+
 ---
 
 This demo is also the reference for **two patterns you'll reuse in real projects.**
@@ -105,3 +123,39 @@ bug can't steal it). `localStorage` would need JS to attach the value to every r
 is readable by any script on the page.
 
 This is a *gate*, not bank-grade auth — perfect for keeping class demos private.
+
+---
+
+The `inspiration_bot` demo adds three more patterns you'll reuse for bots and scheduled work.
+
+### Pattern D — Environments (dev vs prod): same code, different config
+
+The code reads setting *names* (`TELEGRAM_BOT_TOKEN`, `DATABASE_URL`, `ENVIRONMENT`); the
+*values* differ between your laptop (`.env`) and the deployed app (Railway variables). For a
+Telegram bot this isn't optional hygiene — Telegram allows only **one** update-consumer per
+token, so a dev poller and a prod webhook on the **same** token collide (`409 Conflict`). The
+fix is structural: a **separate bot token per environment**, and a separate database so test
+data and a careless dev migration can never touch real users. `ENVIRONMENT` also flips
+behaviour — e.g. local uses **long polling**, production uses a **webhook**.
+
+### Pattern E — Cron: a frequent tick + a per-user due-check
+
+Each user picks their own hour/timezone/cadence, so we don't schedule per user. Instead the
+scheduler fires **hourly** and the code decides who's due: for each non-paused user, compute
+their *local* time and send if the hour matches, the cadence allows today, and they weren't
+already sent today (`last_sent_at` — which makes a re-fired tick **idempotent**). `is_due()`
+is a pure function, unit-tested offline. Trigger it three ways: `uv run python -m
+examples.inspiration_bot.cron` (dev, fires now), a Railway **Cron service** running that same
+command hourly (prod, honours schedules), or `POST /cron/tick` with a secret header (any HTTP
+scheduler). The endpoint is protected exactly like any deployed headless endpoint.
+
+### Pattern F — Tool-using agent with injected (not model-chosen) scope
+
+The proactive nudge is built by a pydantic-ai agent with tools: read what the user saved /
+what we already sent (so it never repeats), search the web (Perplexity), and one reversible
+write tool to change the schedule. The current user's id is carried in a `Deps` object and
+**injected** via `deps=` at run time; tools read `ctx.deps.telegram_id`. Because the id is
+*not* a tool argument, the model literally cannot ask for another user's data — scoping is
+structural, not a prompt it might ignore. The rule worth keeping: **read tools, grant freely;
+a reversible write, fine; destructive or metered actions (delete, image generation) stay in
+human-confirmed code, never a tool the model can call.**
