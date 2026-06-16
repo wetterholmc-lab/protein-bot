@@ -55,6 +55,56 @@ startCommand = "fastapi run path/to/app.py"   # a web app
 (This repo's `railway.toml` is set to run the `examples/agent_idea_web` demo — change it to
 your own app, or delete it to use the Dockerfile default.)
 
+## Deploying a Telegram bot (webhook + cron + environments)
+
+Worked example: `examples/inspiration_bot`. Locally a bot uses **long polling** (no public
+URL). In production it switches to a **webhook** into a FastAPI app, plus a **cron** for
+scheduled work. The switch is driven entirely by config — the *idea of environments*:
+
+> **Use a different bot token (and database) for dev vs prod.** Telegram allows only one
+> update-consumer per token, so your local poller and your deployed webhook **cannot** share
+> a token (you'd get `409 Conflict`). Make two bots with @BotFather. A separate database also
+> keeps test data and dev migrations away from real users.
+
+1. **Make a production bot** with @BotFather (a second, different token).
+2. **Set the start command** (in `railway.toml`):
+   ```toml
+   [deploy]
+   startCommand = "fastapi run examples/inspiration_bot/app.py"
+   ```
+3. **Set production variables** (note `ENVIRONMENT=production`, and a *prod* token/DB):
+   ```bash
+   railway variables \
+     --set "ENVIRONMENT=production" \
+     --set "TELEGRAM_BOT_TOKEN=<prod-bot-token>" \
+     --set "DATABASE_URL=postgresql://...<prod-db>" \
+     --set "OPENROUTER_API_KEY=sk-or-..." \
+     --set "FAL_KEY=..." \
+     --set "TELEGRAM_WEBHOOK_SECRET=$(openssl rand -hex 16)" \
+     --set "CRON_SECRET=$(openssl rand -hex 16)"
+     # ...and your R2_* variables
+   ```
+4. **Give it a domain and tell the app its URL** (the app registers the webhook on boot):
+   ```bash
+   railway domain                                   # e.g. https://my-bot.up.railway.app
+   railway variables --set "PUBLIC_URL=https://my-bot.up.railway.app"
+   ```
+   On the next boot you'll see `webhook registered at ...` in `railway logs`. Message your
+   prod bot to confirm.
+5. **Schedule the daily nudge** — pick one:
+   - **Railway Cron service (simplest):** add a *second* service from the same repo, with the
+     same variables, a start command of `python -m examples.inspiration_bot.cron`, and a
+     **cron schedule** of `0 * * * *` (hourly). Because `ENVIRONMENT=production`, it honours
+     each user's own hour/timezone/cadence and only messages those who are due. (Sending
+     messages uses the Bot API, *not* `getUpdates`, so it never conflicts with the webhook.)
+   - **Any HTTP scheduler:** have it `POST https://my-bot.up.railway.app/cron/tick` hourly
+     with header `X-Cron-Secret: <CRON_SECRET>`. Same logic, via the protected endpoint.
+
+To trigger a tick by hand (prod or local), `curl` the endpoint:
+```bash
+curl -X POST -H "X-Cron-Secret: <CRON_SECRET>" https://my-bot.up.railway.app/cron/tick
+```
+
 ## Gotchas (learned the hard way — these are real)
 
 - **Do NOT put `$PORT` in your start command.** Railway runs the start command *without a

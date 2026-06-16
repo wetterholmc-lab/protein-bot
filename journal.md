@@ -305,3 +305,29 @@ their next interaction, so future checks are instant.
 Lesson: when adding an access gate to an existing system, the "grandfather existing users"
 step is critical but fragile. Even with a migration backfill, a defensive fallback in the
 auth check is worth the extra query.
+
+## 2026-06-15 — Added example #3: inspiration_bot (Telegram, both-directions agent)
+Built the third worked example as a Telegram bot, deliberately keeping the repo single-spirit
+(pure Python toolbox) instead of going React/Next + Better Auth — that's a separate starter,
+not this one. Telegram dissolves the "auth" question: identity is the verified `telegram_id`
+on every update; the users table is keyed on it; authorization is a thin optional allowlist.
+
+Key decisions:
+- **Environments as a first-class concept.** Added `ENVIRONMENT` (+ telegram/cron settings) to
+  config.py. Same code, different *values* in `.env` vs Railway. Separate bot token per env is
+  mandatory, not hygiene: two consumers on one token = Telegram 409. This is the example's spine.
+- **Webhook vs polling, chosen by environment.** Local = long polling (no public URL); prod =
+  webhook into a FastAPI app that also hosts the cron endpoint. One codebase.
+- **Cron = frequent tick + per-user due-check.** Railway Cron (hourly) → `run_due_sends`, which
+  honours each user's hour/timezone/cadence and is idempotent via `last_sent_at`. `is_due` is a
+  pure function, unit-tested offline. Same `cron` command forces an immediate send in dev.
+- **Tool-using agent with injected scope.** pydantic-ai `Deps(telegram_id)` is injected, never a
+  tool argument — so the model physically can't reach another user's data. Read tools granted
+  freely; one reversible write tool (set_schedule); delete + image-gen kept out of the model's
+  hands (human-confirmed / orchestrated). This is the security lesson I most want to land.
+- **Packaging:** multi-file example as a package (`examples/__init__.py` + the bot's `__init__.py`),
+  so absolute imports work under both `python -m ...` and `fastapi run ...` (verified how
+  fastapi-cli walks `__init__.py` parents). Added `pythonpath=["."]` so pytest can import it.
+
+Verified the installed APIs before writing (pydantic-ai 1.104 deps/tools/BinaryContent; PTB 22.8
+Application/handlers/webhook) rather than trusting memory. ruff + pyright clean; 9 offline tests.

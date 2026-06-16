@@ -18,6 +18,7 @@ Usage anywhere in the code:
 """
 
 from functools import lru_cache
+from typing import Literal
 
 from dotenv import load_dotenv
 from pydantic import Field
@@ -40,6 +41,15 @@ class Settings(BaseSettings):
     # Get a key at https://openrouter.ai/keys
     openrouter_api_key: str = Field(description="Your OpenRouter API key.")
     # Which model each tier maps to lives in code — see agent/services/llm.py.
+
+    # --- Environment --------------------------------------------------------
+    # Which environment this process runs in. The SAME code reads the SAME setting
+    # names; only the *values* differ between your laptop (.env) and the deployed
+    # app (Railway variables). Used e.g. to choose polling vs. webhook for a bot.
+    # See examples/inspiration_bot for a worked example of environments.
+    environment: Literal["development", "production"] = Field(
+        default="development", description="development (local) or production (deployed)."
+    )
 
     # --- Logging ------------------------------------------------------------
     # How chatty the logs are: DEBUG, INFO, WARNING, ERROR.
@@ -79,9 +89,11 @@ class Settings(BaseSettings):
     )
 
     # --- Telegram bot (optional) --------------------------------------------
-    # Get a token from @BotFather on Telegram.
+    # IMPORTANT: use a DIFFERENT token per environment. Telegram allows only one
+    # consumer per token, so a dev poller and a prod webhook on the same token
+    # collide (409 Conflict). Make a dev bot and a prod bot with @BotFather.
     telegram_bot_token: str | None = Field(
-        default=None, description="Telegram bot token from @BotFather."
+        default=None, description="Bot token from @BotFather. One per environment."
     )
     # If set, users must enter this password before the bot accepts any messages.
     # Leave unset to keep the bot open to anyone who finds it.
@@ -89,6 +101,35 @@ class Settings(BaseSettings):
         default=None,
         description="Password users must enter once to unlock the bot.",
     )
+    # The secret_token we register with the webhook; Telegram echoes it back in the
+    # X-Telegram-Bot-Api-Secret-Token header so we can reject forged calls (prod).
+    telegram_webhook_secret: str | None = Field(
+        default=None, description="Shared secret verifying webhook calls came from Telegram."
+    )
+    # Public base URL of the deployed app (e.g. https://my-bot.up.railway.app), used
+    # to register the webhook. Unset locally → the bot uses long polling instead.
+    public_url: str | None = Field(
+        default=None, description="Public base URL of the deployed app (for the webhook)."
+    )
+    # Secret required on the POST /cron/tick endpoint so only the scheduler can call it.
+    cron_secret: str | None = Field(
+        default=None, description="Secret required to call the cron endpoint."
+    )
+    # Comma-separated Telegram user ids allowed to use the bot (authorization, on top
+    # of Telegram's authentication). Empty = open to anyone (fine for local dev).
+    allowed_telegram_ids: str = Field(
+        default="", description="Comma-separated allowed Telegram user ids. Empty = open."
+    )
+
+    @property
+    def allowed_ids(self) -> set[int]:
+        """Parse `allowed_telegram_ids` into a set of ints (commas or spaces)."""
+        return {int(p) for p in self.allowed_telegram_ids.replace(",", " ").split() if p.strip()}
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment == "production"
+
 
 
 @lru_cache

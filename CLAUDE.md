@@ -113,6 +113,7 @@ These libraries move fast and your training data may be stale — **when you nee
 | rich | 15.0.0 | (see PyPI) |
 | HTMX (CDN) | 2.0.10 | https://htmx.org/docs/ |
 | Tailwind (CDN) | 4.x | https://tailwindcss.com/docs |
+| python-telegram-bot | 22.8 | https://docs.python-telegram-bot.org/ (Telegram bots; see `examples/inspiration_bot`) |
 
 For **any fal model**, read its machine-readable spec at `https://fal.ai/models/<model-id>/llms.txt` — it lists exact inputs and outputs.
 
@@ -175,6 +176,7 @@ uv run fastapi dev src/agent/web.py           # run the web app with reload
 - **Logging:** call `setup_logging()` once at startup, then `from loguru import logger`.
 - **Frontend:** Jinja2 templates + HTMX (dynamic) + Tailwind (styling), all via CDN. No npm/build.
 - **Gate any web app you deploy.** A public URL is public — set `APP_PASSWORD` so it sits behind a login (httponly cookie), so strangers can't use it or run up your API bill. See `examples/agent_idea_web/` (Pattern C).
+- **Environments (dev vs prod).** The same code reads the same setting *names*; only the *values* differ between your local `.env` and deployed (Railway) variables. The `ENVIRONMENT` setting (`development`/`production`) is the switch. Use **separate credentials per environment** — e.g. a different Telegram bot token and a different database for dev vs prod — so local testing never touches real users (and, for Telegram, so a dev poller and prod webhook don't collide on one token). See `examples/inspiration_bot` (Pattern D).
 - **Reproducible by default.** Commit `uv.lock`; keep versions pinned. Keep setup idempotent — safe to run again — like `agent-doctor` and `db.apply_migrations`.
 - **Fail loud and early.** Config is validated at startup (pydantic-settings). On failure, give the user a clear message, not a stack trace or a silent wrong result. Add timeouts/retries on external calls when it matters.
 
@@ -207,6 +209,7 @@ We deploy to Railway with the **Railway CLI** (full walkthrough in `docs/deploy.
 - **Secrets are Railway variables**, never the committed `.env` (it's git- and docker-ignored, so it's never in the image).
 - **Don't put `$PORT` in a start command** — Railway runs it without a shell, so it won't expand. `fastapi run` reads the `PORT` env var itself.
 - **Protect anything public.** A web UI → `APP_PASSWORD` gate. A headless app exposing an HTTP endpoint (e.g. a webhook) → require a secret token on every request. A bot with no inbound HTTP is protected by its platform token. Never deploy an open, unauthenticated endpoint.
+- **Telegram bots & scheduled work.** Locally a bot uses long **polling** (no public URL); deployed it uses a **webhook** (verified by a secret token) served from a FastAPI app. Recurring work (a "cron") runs either as a Railway **Cron service** running a one-shot command, or as a token-protected HTTP endpoint a scheduler calls — never an open endpoint. Worked example + walkthrough: `examples/inspiration_bot` and `docs/deploy.md`.
 
 ## Definition of done (for any change)
 

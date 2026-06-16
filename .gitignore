@@ -6,11 +6,14 @@ dist/
 wheels/
 *.egg-info
 
+.DS_Store
+
 # Virtual environments
 .venv
 
 # Secrets — NEVER commit your real .env
 .env
+.env-files
 
 # Logs (written at runtime)
 logs/

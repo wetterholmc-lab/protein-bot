@@ -64,6 +64,9 @@ venvPath = "."
 venv = ".venv"
 
 [tool.pytest.ini_options]
+# Put the repo root on sys.path so tests can import the `examples` packages (the
+# `agent` package is installed into the venv, but `examples/` is not).
+pythonpath = ["."]
 # asyncio_mode = "auto" means you can write `async def test_...` with no decorator.
 asyncio_mode = "auto"
 # One event loop for the whole session (like a real app has). Some clients
