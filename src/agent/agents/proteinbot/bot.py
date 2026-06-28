@@ -180,6 +180,14 @@ async def _mark_reminded_today(telegram_id: int, today: date) -> None:
     )
 
 
+async def _set_reminder_status(telegram_id: int, status: str) -> None:
+    await db.execute(
+        "UPDATE proteinbot_users SET reminder_status = $1 WHERE telegram_id = $2",
+        status,
+        telegram_id,
+    )
+
+
 async def cmd_reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await _check_auth(update, context):
         return
@@ -702,6 +710,31 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text("Type /start to set up your profile first.")
         return
 
+    if text.lower() == "stop":
+        await _set_reminder_status(telegram_id, "stopped")
+        await update.message.reply_text(
+            "Got it — I'll stop sending you daily check-ins.\n\n"
+            "You can still log food and check your status any time. "
+            "Type *restart* if you ever want the reminders back.",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
+
+    if text.lower() == "pause":
+        await _set_reminder_status(telegram_id, "paused")
+        await update.message.reply_text(
+            "Reminders paused — I won't check in until you say *restart*.",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
+
+    if text.lower() == "restart":
+        await _set_reminder_status(telegram_id, "active")
+        await update.message.reply_text(
+            "Reminders are back on! I'll check in at 15:00 your local time.",
+        )
+        return
+
     if is_status_request(text):
         summary = await daily_tracker.get_daily_summary(profile)
         await update.message.reply_text(
@@ -818,12 +851,16 @@ async def handle_meal_correction_callback(
 
 async def daily_reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
     rows = await db.fetch(
-        "SELECT telegram_id, timezone_offset, last_reminded_date FROM proteinbot_users"
+        "SELECT telegram_id, timezone_offset, last_reminded_date, reminder_status"
+        " FROM proteinbot_users"
     )
     for row in rows:
         telegram_id = int(row["telegram_id"])
         tz_offset = int(row["timezone_offset"])
         last_reminded: date | None = row["last_reminded_date"]
+
+        if row["reminder_status"] != "active":
+            continue
 
         user_tz = timezone(timedelta(hours=tz_offset))
         local_now = datetime.now(tz=user_tz)
