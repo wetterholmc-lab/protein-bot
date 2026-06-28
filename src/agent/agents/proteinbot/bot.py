@@ -890,7 +890,10 @@ async def daily_reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
                     text=(
                         f"Afternoon check-in — you're at *{summary.total_g}g* of your "
                         f"*{summary.goal_g}g* goal. About *{summary.deficit_g}g* to go.\n\n"
-                        "Are you planning dinner tonight?"
+                        "Are you planning dinner tonight?\n\n"
+                        "_Type *pause* to skip reminders for a while, "
+                        "or *stop* to turn them off entirely. "
+                        "You can restart anytime by typing *restart*._"
                     ),
                     parse_mode=ParseMode.MARKDOWN,
                     reply_markup=_keyboard(("Yes", "dinner_yes"), ("No", "dinner_no")),
