@@ -132,7 +132,8 @@ async def suggest_dinner(
     result = await _agent.run(
         f"Protein deficit: {deficit_g}g. Diet: {diet_style.value}."
         f"{_recipe_hint(saved_recipe_names)} "
-        "Suggest 2–3 dinner options that would cover most of this deficit."
+        "Suggest 2–3 dinner options that would cover most of this deficit. "
+        "Reply with only the bullet points — no intro sentence."
     )
     return result.output
 
