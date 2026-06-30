@@ -900,7 +900,6 @@ async def daily_reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
                         "You can restart anytime by typing *restart*._"
                     ),
                     parse_mode=ParseMode.MARKDOWN,
-                    reply_markup=_keyboard(("Yes", "dinner_yes"), ("No", "dinner_no")),
                 )
             await _mark_reminded_today(telegram_id, local_now.date())
         except Exception:
