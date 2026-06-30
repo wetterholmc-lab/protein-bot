@@ -889,12 +889,17 @@ async def daily_reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
                     parse_mode=ParseMode.MARKDOWN,
                 )
             else:
+                saved_recipes = await recipe_store.list_recipes(telegram_id)
+                suggestions = await suggestion_engine.suggest_dinner(
+                    summary.deficit_g, profile.diet_style, saved_recipe_names=saved_recipes
+                )
                 await context.bot.send_message(
                     chat_id=telegram_id,
                     text=(
                         f"Afternoon check-in — you're at *{summary.total_g}g* of your "
                         f"*{summary.goal_g}g* goal. About *{summary.deficit_g}g* to go.\n\n"
-                        "Are you planning dinner tonight?\n\n"
+                        f"Here are a few dinner ideas to help you reach your protein goal:\n"
+                        f"{suggestions}\n\n"
                         "_Type *pause* to skip reminders for a while, "
                         "or *stop* to turn them off entirely. "
                         "You can restart anytime by typing *restart*._"

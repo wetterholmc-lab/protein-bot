@@ -331,3 +331,27 @@ Key decisions:
 
 Verified the installed APIs before writing (pydantic-ai 1.104 deps/tools/BinaryContent; PTB 22.8
 Application/handlers/webhook) rather than trusting memory. ruff + pyright clean; 9 offline tests.
+
+## 2026-06-30 — Added reminder controls and simplified the afternoon check-in
+
+**Stop/pause/restart:**
+Users can now type "stop", "pause", or "restart" in the chat to control the 15:00 daily
+check-in. Added a `reminder_status` column to `proteinbot_users` (migration 005, default
+`'active'`). The daily reminder job skips any user who isn't `'active'`. All three keywords
+are matched case-insensitively and exactly (so "stop please" doesn't match — deliberate).
+
+Confirmed live on the real bot by watching the DB while the user typed "pause" then "restart"
+— both state transitions were caught in real time.
+
+**Simplified the afternoon check-in — removed Yes/No dinner buttons:**
+The old flow asked "Are you planning dinner tonight?" with Yes/No inline buttons, then
+generated suggestions based on the answer. This was removed: the bot now generates dinner
+suggestions directly and includes them in the reminder message every time. Simpler UX,
+no button tap required.
+
+Trade-off: we lost the "No → snack ideas instead" path. Decided that's fine for now —
+the dinner suggestions are the common case and the user can always ask for snack ideas
+separately.
+
+Both reminder variants (goal hit and goal not hit) now include the pause/stop/restart hint
+at the bottom so users know how to opt out.
