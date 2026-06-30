@@ -881,8 +881,12 @@ async def daily_reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
                     chat_id=telegram_id,
                     text=(
                         f"Afternoon check-in — you've already hit your goal today! "
-                        f"{summary.total_g}g logged. Nothing more needed."
+                        f"{summary.total_g}g logged. Nothing more needed.\n\n"
+                        "_Type *pause* to skip reminders for a while, "
+                        "or *stop* to turn them off entirely. "
+                        "You can restart anytime by typing *restart*._"
                     ),
+                    parse_mode=ParseMode.MARKDOWN,
                 )
             else:
                 await context.bot.send_message(
